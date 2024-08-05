@@ -29,11 +29,17 @@ def generate_story(prompt, openai_api_key):
 def text_to_speech(text, voice_id, elevenlabs_api_key):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
-        "Authorization": f"Bearer {elevenlabs_api_key}",
-        "Content-Type": "application/json"
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": elevenlabs_api_key
     }
     data = {
-        "text": text
+        "text": text,
+        "model_id": "eleven_monolingual_v1",
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.5
+        }
     }
     response = requests.post(url, headers=headers, json=data)
     response.raise_for_status()
@@ -109,6 +115,8 @@ else:
                         st.write(f"Processed dialogue: {dialogue}")
                     else:
                         st.warning(f"Skipping invalid dialogue: {dialogue}")
+            except requests.exceptions.HTTPError as http_err:
+                st.error(f"HTTP error occurred: {http_err}")
             except Exception as e:
                 st.error(f"Error processing dialogues: {e}")
                 st.stop()
@@ -125,3 +133,4 @@ else:
                     st.stop()
             else:
                 st.error("No valid video clips were created. Please check the dialogues.")
+
