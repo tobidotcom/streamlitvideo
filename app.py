@@ -1,8 +1,10 @@
 import streamlit as st
 import requests
-from moviepy.editor import TextClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
+from PIL import Image, ImageDraw, ImageFont
+from moviepy.editor import ImageSequenceClip, concatenate_videoclips, AudioFileClip
 from io import BytesIO
 import tempfile
+import os
 
 # Function to generate story using OpenAI's chat/completions endpoint
 def generate_story(prompt, openai_api_key):
@@ -41,24 +43,41 @@ def text_to_speech(text, voice, openai_api_key):
     response.raise_for_status()
     return response.content
 
-# Function to create a video clip from text and audio
-def create_video_clip(text, audio_data):
+# Function to create an image with text using PIL
+def create_image_with_text(text, character):
+    img = Image.new('RGB', (640, 480), color = (255, 255, 255))
+    d = ImageDraw.Draw(img)
+    
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-            audio_file.write(audio_data)
-            audio_file_path = audio_file.name
+        font = ImageFont.load_default()
+    except IOError:
+        font = ImageFont.load_default()
 
-        audio_clip = AudioFileClip(audio_file_path)
-        duration = audio_clip.duration
-        
-        # Create a simple TextClip without ImageMagick
-        text_clip = TextClip(text, fontsize=24, color='white', size=(600, None))
-        text_clip = text_clip.set_position(('center', 'center')).set_duration(duration)
-        
-        return CompositeVideoClip([text_clip.set_audio(audio_clip)]).set_duration(duration)
-    except Exception as e:
-        st.error(f"Error creating video clip: {e}")
-        raise
+    d.text((10,10), f"{character}: {text}", font=font, fill=(0,0,0))
+
+    img_bytes = BytesIO()
+    img.save(img_bytes, format='PNG')
+    img_bytes.seek(0)
+    return img_bytes
+
+# Function to create a video clip from images and audio
+def create_video_clip(text, audio_data, character):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+        audio_file.write(audio_data)
+        audio_file_path = audio_file.name
+
+    audio_clip = AudioFileClip(audio_file_path)
+    duration = audio_clip.duration
+
+    img_bytes = create_image_with_text(text, character)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_file:
+        img_file.write(img_bytes.read())
+        img_file_path = img_file.name
+
+    image_clip = ImageSequenceClip([img_file_path], fps=24)
+    image_clip = image_clip.set_duration(duration).set_audio(audio_clip)
+
+    return image_clip
 
 # Manually specify available voices
 available_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
@@ -92,15 +111,17 @@ else:
                 st.write("Generated Story:")
                 st.write(story)
 
-                # Step 2: Process the story as a single dialogue or split into chunks
+                # Split the story into alternating dialogues
+                dialogues = [story[i:i + 300] for i in range(0, len(story), 300)]
+                character_names = ["Alice", "Bob"]
+
                 video_clips = []
-                chunk_size = 500  # Maximum length of text chunk for TTS
-                for i in range(0, len(story), chunk_size):
-                    text_chunk = story[i:i + chunk_size]
-                    audio_data = text_to_speech(text_chunk, selected_voice, openai_api_key)
-                    video_clip = create_video_clip(text_chunk, audio_data)
+                for i, dialogue in enumerate(dialogues):
+                    character = character_names[i % len(character_names)]
+                    audio_data = text_to_speech(dialogue, selected_voice, openai_api_key)
+                    video_clip = create_video_clip(dialogue, audio_data, character)
                     video_clips.append(video_clip)
-                    st.write(f"Processed text chunk: {text_chunk[:50]}...")
+                    st.write(f"Processed dialogue chunk: {dialogue[:50]}...")
 
                 # Step 3: Concatenate video clips
                 if video_clips:
