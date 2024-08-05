@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import ImageSequenceClip, concatenate_videoclips, AudioFileClip
 from io import BytesIO
 import tempfile
-import os
+import numpy as np
 
 # Function to generate story using OpenAI's chat/completions endpoint
 def generate_story(prompt, openai_api_key):
@@ -44,24 +44,32 @@ def text_to_speech(text, voice, openai_api_key):
     return response.content
 
 # Function to create an image with text using PIL
-def create_image_with_text(text, character):
+def create_image_with_text(text, character, is_sent, font):
     img = Image.new('RGB', (640, 480), color = (255, 255, 255))
     d = ImageDraw.Draw(img)
     
-    try:
-        font = ImageFont.load_default()
-    except IOError:
-        font = ImageFont.load_default()
-
-    d.text((10,10), f"{character}: {text}", font=font, fill=(0,0,0))
-
+    bubble_width = 600
+    bubble_padding = 10
+    bubble_color = "#d4f1f4" if is_sent else "#f1f1f1"
+    
+    # Draw chat bubble
+    draw = ImageDraw.Draw(img)
+    text_width, text_height = draw.textsize(text, font=font)
+    bubble_height = text_height + 2 * bubble_padding
+    
+    # Draw the bubble background
+    draw.rectangle([(20, 20), (20 + bubble_width, 20 + bubble_height)], fill=bubble_color)
+    
+    # Draw the text on the bubble
+    draw.text((30, 30), text, font=font, fill="black")
+    
     img_bytes = BytesIO()
     img.save(img_bytes, format='PNG')
     img_bytes.seek(0)
     return img_bytes
 
 # Function to create a video clip from images and audio
-def create_video_clip(text, audio_data, character):
+def create_video_clip(text, audio_data, character, is_sent):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
         audio_file.write(audio_data)
         audio_file_path = audio_file.name
@@ -69,12 +77,11 @@ def create_video_clip(text, audio_data, character):
     audio_clip = AudioFileClip(audio_file_path)
     duration = audio_clip.duration
 
-    img_bytes = create_image_with_text(text, character)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_file:
-        img_file.write(img_bytes.read())
-        img_file_path = img_file.name
-
-    image_clip = ImageSequenceClip([img_file_path], fps=24)
+    font = ImageFont.truetype("arial.ttf", 24)
+    img_bytes = create_image_with_text(text, character, is_sent, font)
+    img_array = np.array(Image.open(img_bytes))
+    
+    image_clip = ImageSequenceClip([img_array], fps=24)
     image_clip = image_clip.set_duration(duration).set_audio(audio_clip)
 
     return image_clip
@@ -119,7 +126,8 @@ else:
                 for i, dialogue in enumerate(dialogues):
                     character = character_names[i % len(character_names)]
                     audio_data = text_to_speech(dialogue, selected_voice, openai_api_key)
-                    video_clip = create_video_clip(dialogue, audio_data, character)
+                    is_sent = i % 2 == 0
+                    video_clip = create_video_clip(dialogue, audio_data, character, is_sent)
                     video_clips.append(video_clip)
                     st.write(f"Processed dialogue chunk: {dialogue[:50]}...")
 
