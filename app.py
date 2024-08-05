@@ -5,6 +5,7 @@ from moviepy.editor import ImageSequenceClip, concatenate_videoclips, AudioFileC
 from io import BytesIO
 import tempfile
 import numpy as np
+import os
 
 # Function to generate story using OpenAI's chat/completions endpoint
 def generate_story(prompt, openai_api_key):
@@ -87,9 +88,17 @@ def create_video_clip(text, audio_data, character, is_sent):
     img_bytes = create_image_with_text(text, character, is_sent)
     img_array = np.array(Image.open(img_bytes))
     
-    image_clip = ImageSequenceClip([img_array], fps=24)
+    # Save image temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as img_file:
+        img_file.write(img_array.tobytes())
+        img_file_path = img_file.name
+    
+    image_clip = ImageSequenceClip([img_file_path], fps=24)
     image_clip = image_clip.set_duration(duration).set_audio(audio_clip)
-
+    
+    # Clean up the temporary image file after use
+    os.remove(img_file_path)
+    
     return image_clip
 
 # Manually specify available voices
@@ -144,6 +153,7 @@ else:
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
                             final_video.write_videofile(temp_file.name, fps=24)
                             st.video(temp_file.name)
+                            os.remove(temp_file.name)  # Clean up temp file
                     except Exception as e:
                         st.error(f"Error creating final video: {e}")
                 else:
