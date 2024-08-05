@@ -57,16 +57,18 @@ def create_image_with_text(text, character, is_sent):
     bubble_padding = 10
     bubble_color = "#d4f1f4" if is_sent else "#f1f1f1"
     
-    # Draw chat bubble
-    draw = ImageDraw.Draw(img)
-    text_width, text_height = draw.textsize(text, font=font)
+    # Calculate text bounding box
+    bbox = d.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    
     bubble_height = text_height + 2 * bubble_padding
     
     # Draw the bubble background
-    draw.rectangle([(20, 20), (20 + bubble_width, 20 + bubble_height)], fill=bubble_color)
+    d.rectangle([(20, 20), (20 + bubble_width, 20 + bubble_height)], fill=bubble_color)
     
     # Draw the text on the bubble
-    draw.text((30, 30), text, font=font, fill="black")
+    d.text((30, 30), text, font=font, fill="black")
     
     img_bytes = BytesIO()
     img.save(img_bytes, format='PNG')
@@ -148,3 +150,4 @@ else:
                     st.error("No valid video clips were created. Please check the story.")
             except Exception as e:
                 st.error(f"Error generating video: {e}")
+
