@@ -71,7 +71,7 @@ else:
     try:
         # Fetch available voices
         voices = fetch_voices(st.session_state["elevenlabs_api_key"])
-        voice_options = {voice["name"]: voice["id"] for voice in voices}
+        voice_options = {voice["name"]: voice["voice_id"] for voice in voices}
     except Exception as e:
         st.error(f"Error fetching voices: {e}")
         voice_options = {}
@@ -130,3 +130,4 @@ else:
                     st.stop()
             else:
                 st.error("No valid video clips were created. Please check the dialogues.")
+
