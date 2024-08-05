@@ -44,10 +44,17 @@ def text_to_speech(text, voice, openai_api_key):
 # Function to create a video clip from text and audio
 def create_video_clip(text, audio_data):
     try:
-        audio_clip = AudioFileClip(audio_data)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+            audio_file.write(audio_data)
+            audio_file_path = audio_file.name
+
+        audio_clip = AudioFileClip(audio_file_path)
         duration = audio_clip.duration
-        text_clip = TextClip(text, fontsize=24, color='white', size=(600, None), method='caption')
+        
+        # Create a simple TextClip without ImageMagick
+        text_clip = TextClip(text, fontsize=24, color='white', size=(600, None))
         text_clip = text_clip.set_position(('center', 'center')).set_duration(duration)
+        
         return CompositeVideoClip([text_clip.set_audio(audio_clip)]).set_duration(duration)
     except Exception as e:
         st.error(f"Error creating video clip: {e}")
@@ -91,9 +98,7 @@ else:
                 for i in range(0, len(story), chunk_size):
                     text_chunk = story[i:i + chunk_size]
                     audio_data = text_to_speech(text_chunk, selected_voice, openai_api_key)
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-                        audio_file.write(audio_data)
-                    video_clip = create_video_clip(text_chunk, audio_file.name)
+                    video_clip = create_video_clip(text_chunk, audio_data)
                     video_clips.append(video_clip)
                     st.write(f"Processed text chunk: {text_chunk[:50]}...")
 
@@ -110,5 +115,3 @@ else:
                     st.error("No valid video clips were created. Please check the story.")
             except Exception as e:
                 st.error(f"Error generating video: {e}")
-
-
