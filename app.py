@@ -4,6 +4,29 @@ from moviepy.editor import TextClip, CompositeVideoClip, concatenate_videoclips,
 from io import BytesIO
 import tempfile
 
+# Function to generate story using OpenAI's chat/completions endpoint
+def generate_story(prompt, openai_api_key):
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {openai_api_key}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "gpt-4-turbo",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant that writes stories."},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 150,
+        "temperature": 0.7,
+        "n": 1
+    }
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json()["choices"][0]["message"]["content"]
+    else:
+        raise Exception(f"HTTP error occurred: {response.status_code} - {response.text}")
+
 # Function to fetch available voices from ElevenLabs
 def fetch_voices(elevenlabs_api_key):
     url = "https://api.elevenlabs.io/v1/voices"
