@@ -42,12 +42,12 @@ def text_to_speech(text, voice, openai_api_key):
     return response.content
 
 # Function to create a video clip from text and audio
-def create_video_clip(text, audio_data, position):
+def create_video_clip(text, audio_data):
     try:
         audio_clip = AudioFileClip(audio_data)
         duration = audio_clip.duration
         text_clip = TextClip(text, fontsize=24, color='white', size=(600, None), method='caption')
-        text_clip = text_clip.set_position(position).set_duration(duration)
+        text_clip = text_clip.set_position(('center', 'center')).set_duration(duration)
         return CompositeVideoClip([text_clip.set_audio(audio_clip)]).set_duration(duration)
     except Exception as e:
         st.error(f"Error creating video clip: {e}")
@@ -85,25 +85,19 @@ else:
                 st.write("Generated Story:")
                 st.write(story)
 
-                # Step 2: Split story into dialogues
-                dialogues = story.split("\n")
+                # Step 2: Process the story as a single dialogue or split into chunks
                 video_clips = []
+                chunk_size = 500  # Maximum length of text chunk for TTS
+                for i in range(0, len(story), chunk_size):
+                    text_chunk = story[i:i + chunk_size]
+                    audio_data = text_to_speech(text_chunk, selected_voice, openai_api_key)
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+                        audio_file.write(audio_data)
+                    video_clip = create_video_clip(text_chunk, audio_file.name)
+                    video_clips.append(video_clip)
+                    st.write(f"Processed text chunk: {text_chunk[:50]}...")
 
-                # Step 3: Convert dialogues to speech and create video clips
-                for i, dialogue in enumerate(dialogues):
-                    if ':' in dialogue:
-                        speaker, text = dialogue.split(":", 1)
-                        audio_data = text_to_speech(text.strip(), selected_voice, openai_api_key)
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-                            audio_file.write(audio_data)
-                        position = ('left', 'center') if i % 2 == 0 else ('right', 'center')
-                        video_clip = create_video_clip(dialogue, audio_file.name, position)
-                        video_clips.append(video_clip)
-                        st.write(f"Processed dialogue: {dialogue}")
-                    else:
-                        st.warning(f"Skipping invalid dialogue: {dialogue}")
-
-                # Step 4: Concatenate video clips
+                # Step 3: Concatenate video clips
                 if video_clips:
                     try:
                         final_video = concatenate_videoclips(video_clips)
@@ -113,7 +107,8 @@ else:
                     except Exception as e:
                         st.error(f"Error creating final video: {e}")
                 else:
-                    st.error("No valid video clips were created. Please check the dialogues.")
+                    st.error("No valid video clips were created. Please check the story.")
             except Exception as e:
                 st.error(f"Error generating video: {e}")
+
 
