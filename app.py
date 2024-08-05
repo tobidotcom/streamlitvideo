@@ -1,9 +1,8 @@
 import streamlit as st
 import requests
-from moviepy.editor import VideoClip, concatenate_videoclips, TextClip, CompositeVideoClip
+from moviepy.editor import TextClip, CompositeVideoClip, concatenate_videoclips, AudioFileClip
 from io import BytesIO
 import tempfile
-import os
 
 # Function to generate story using OpenAI's chat/completions endpoint
 def generate_story(prompt, openai_api_key):
@@ -41,12 +40,13 @@ def text_to_speech(text, voice_id, elevenlabs_api_key):
     return response.content
 
 # Function to create a video clip from text and audio
-def create_video_clip(text, audio_data, duration, position):
+def create_video_clip(text, audio_data, position):
     try:
+        audio_clip = AudioFileClip(audio_data)
+        duration = audio_clip.duration
         text_clip = TextClip(text, fontsize=24, color='white', size=(600, None), method='caption')
         text_clip = text_clip.set_position(position).set_duration(duration)
-        audio_clip = VideoClip(lambda t: None, duration=duration).set_audio(audio_data)
-        return CompositeVideoClip([text_clip, audio_clip])
+        return CompositeVideoClip([text_clip.set_audio(audio_clip)]).set_duration(duration)
     except Exception as e:
         st.error(f"Error creating video clip: {e}")
         raise
@@ -92,7 +92,6 @@ else:
             
             # Step 2: Split story into dialogues
             dialogues = story.split("\n")
-            audio_clips = []
             video_clips = []
             
             # Step 3: Convert dialogues to speech and create video clips
@@ -102,21 +101,27 @@ else:
                         speaker, text = dialogue.split(":", 1)
                         voice_id = voice_id_1 if i % 2 == 0 else voice_id_2
                         audio_data = text_to_speech(text.strip(), voice_id, elevenlabs_api_key)
-                        audio_clip = BytesIO(audio_data)
-                        duration = len(audio_data) / 32000  # Estimate duration from audio size (assuming 32 kbps)
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+                            audio_file.write(audio_data)
                         position = ('left', 'center') if i % 2 == 0 else ('right', 'center')
-                        video_clip = create_video_clip(dialogue, audio_clip, duration, position)
+                        video_clip = create_video_clip(dialogue, audio_file.name, position)
                         video_clips.append(video_clip)
+                        st.write(f"Processed dialogue: {dialogue}")
+                    else:
+                        st.warning(f"Skipping invalid dialogue: {dialogue}")
             except Exception as e:
                 st.error(f"Error processing dialogues: {e}")
                 st.stop()
             
             # Step 4: Concatenate video clips
-            try:
-                final_video = concatenate_videoclips(video_clips)
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
-                    final_video.write_videofile(temp_file.name, fps=24)
-                    st.video(temp_file.name)
-            except Exception as e:
-                st.error(f"Error creating final video: {e}")
-                st.stop()
+            if video_clips:
+                try:
+                    final_video = concatenate_videoclips(video_clips)
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
+                        final_video.write_videofile(temp_file.name, fps=24)
+                        st.video(temp_file.name)
+                except Exception as e:
+                    st.error(f"Error creating final video: {e}")
+                    st.stop()
+            else:
+                st.error("No valid video clips were created. Please check the dialogues.")
