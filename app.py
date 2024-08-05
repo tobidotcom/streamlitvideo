@@ -44,10 +44,15 @@ def text_to_speech(text, voice, openai_api_key):
     return response.content
 
 # Function to create an image with text using PIL
-def create_image_with_text(text, character, is_sent, font):
+def create_image_with_text(text, character, is_sent):
     img = Image.new('RGB', (640, 480), color = (255, 255, 255))
     d = ImageDraw.Draw(img)
-    
+
+    try:
+        font = ImageFont.load_default()  # Load default font
+    except IOError:
+        font = ImageFont.load_default()
+
     bubble_width = 600
     bubble_padding = 10
     bubble_color = "#d4f1f4" if is_sent else "#f1f1f1"
@@ -77,8 +82,7 @@ def create_video_clip(text, audio_data, character, is_sent):
     audio_clip = AudioFileClip(audio_file_path)
     duration = audio_clip.duration
 
-    font = ImageFont.truetype("arial.ttf", 24)
-    img_bytes = create_image_with_text(text, character, is_sent, font)
+    img_bytes = create_image_with_text(text, character, is_sent)
     img_array = np.array(Image.open(img_bytes))
     
     image_clip = ImageSequenceClip([img_array], fps=24)
