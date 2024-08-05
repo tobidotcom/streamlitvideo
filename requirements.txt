@@ -2,3 +2,5 @@ streamlit
 requests
 moviepy
 pillow
+imageio[pyav]
+imageio[opencv]
