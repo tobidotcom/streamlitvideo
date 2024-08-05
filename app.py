@@ -53,15 +53,8 @@ def create_video_clip(text, audio_data, position):
         st.error(f"Error creating video clip: {e}")
         raise
 
-# Function to get available voices from OpenAI
-def get_available_voices(openai_api_key):
-    url = "https://api.openai.com/v1/audio/voices"
-    headers = {
-        "Authorization": f"Bearer {openai_api_key}"
-    }
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    return response.json()["voices"]
+# Manually specify available voices
+available_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 
 # Streamlit UI
 st.title("AI Video Generator")
@@ -81,16 +74,8 @@ if "openai_api_key" not in st.session_state:
 else:
     openai_api_key = st.session_state["openai_api_key"]
 
-    # Fetch available voices
-    try:
-        voices = get_available_voices(openai_api_key)
-        voice_options = [voice["name"] for voice in voices]
-    except Exception as e:
-        st.error(f"Error fetching voices: {e}")
-        voice_options = []
-
     prompt = st.text_input("Enter your video prompt:")
-    selected_voice = st.selectbox("Select Voice", options=voice_options)
+    selected_voice = st.selectbox("Select Voice", options=available_voices)
 
     if st.button("Generate Video"):
         if prompt:
