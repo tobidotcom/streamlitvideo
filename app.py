@@ -4,26 +4,17 @@ from moviepy.editor import TextClip, CompositeVideoClip, concatenate_videoclips,
 from io import BytesIO
 import tempfile
 
-# Function to generate story using OpenAI's chat/completions endpoint
-def generate_story(prompt, openai_api_key):
-    url = "https://api.openai.com/v1/chat/completions"
+# Function to fetch available voices from ElevenLabs
+def fetch_voices(elevenlabs_api_key):
+    url = "https://api.elevenlabs.io/v1/voices"
     headers = {
-        "Authorization": f"Bearer {openai_api_key}",
-        "Content-Type": "application/json"
+        "xi-api-key": elevenlabs_api_key
     }
-    data = {
-        "model": "gpt-4-turbo",
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant that writes stories."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 150,
-        "temperature": 0.7,
-        "n": 1
-    }
-    response = requests.post(url, headers=headers, json=data)
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json()["voices"]
+    else:
+        raise Exception(f"HTTP error occurred: {response.status_code} - {response.text}")
 
 # Function to convert text to speech using ElevenLabs
 def text_to_speech(text, voice_id, elevenlabs_api_key):
@@ -42,8 +33,10 @@ def text_to_speech(text, voice_id, elevenlabs_api_key):
         }
     }
     response = requests.post(url, headers=headers, json=data)
-    response.raise_for_status()
-    return response.content
+    if response.status_code == 200:
+        return response.content
+    else:
+        raise Exception(f"HTTP error occurred: {response.status_code} - {response.text}")
 
 # Function to create a video clip from text and audio
 def create_video_clip(text, audio_data, position):
@@ -65,28 +58,33 @@ with st.sidebar:
     st.header("Settings")
     openai_api_key = st.text_input("OpenAI API Key", type="password")
     elevenlabs_api_key = st.text_input("ElevenLabs API Key", type="password")
-    voice_id_1 = st.text_input("Voice ID 1", value="voice_id_1")
-    voice_id_2 = st.text_input("Voice ID 2", value="voice_id_2")
-    
+
     if st.button("Save API Keys"):
         st.session_state["openai_api_key"] = openai_api_key
         st.session_state["elevenlabs_api_key"] = elevenlabs_api_key
-        st.session_state["voice_id_1"] = voice_id_1
-        st.session_state["voice_id_2"] = voice_id_2
         st.success("API keys saved!")
 
 # Check if API keys are available
 if "openai_api_key" not in st.session_state or "elevenlabs_api_key" not in st.session_state:
     st.warning("Please enter your API keys in the settings menu.")
 else:
+    try:
+        # Fetch available voices
+        voices = fetch_voices(st.session_state["elevenlabs_api_key"])
+        voice_options = {voice["name"]: voice["id"] for voice in voices}
+    except Exception as e:
+        st.error(f"Error fetching voices: {e}")
+        voice_options = {}
+
+    selected_voice = st.selectbox("Select Voice", options=list(voice_options.keys()))
+
     prompt = st.text_input("Enter your video prompt:")
     if st.button("Generate Video"):
-        if prompt:
+        if prompt and selected_voice:
             openai_api_key = st.session_state["openai_api_key"]
             elevenlabs_api_key = st.session_state["elevenlabs_api_key"]
-            voice_id_1 = st.session_state["voice_id_1"]
-            voice_id_2 = st.session_state["voice_id_2"]
-            
+            voice_id = voice_options.get(selected_voice, "")
+
             # Step 1: Generate story
             try:
                 story = generate_story(prompt, openai_api_key)
@@ -95,17 +93,16 @@ else:
             except Exception as e:
                 st.error(f"Error generating story: {e}")
                 st.stop()
-            
+
             # Step 2: Split story into dialogues
             dialogues = story.split("\n")
             video_clips = []
-            
+
             # Step 3: Convert dialogues to speech and create video clips
             try:
                 for i, dialogue in enumerate(dialogues):
                     if ':' in dialogue:
                         speaker, text = dialogue.split(":", 1)
-                        voice_id = voice_id_1 if i % 2 == 0 else voice_id_2
                         audio_data = text_to_speech(text.strip(), voice_id, elevenlabs_api_key)
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
                             audio_file.write(audio_data)
@@ -120,7 +117,7 @@ else:
             except Exception as e:
                 st.error(f"Error processing dialogues: {e}")
                 st.stop()
-            
+
             # Step 4: Concatenate video clips
             if video_clips:
                 try:
@@ -133,4 +130,3 @@ else:
                     st.stop()
             else:
                 st.error("No valid video clips were created. Please check the dialogues.")
-
